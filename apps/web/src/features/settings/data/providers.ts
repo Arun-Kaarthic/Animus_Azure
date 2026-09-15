@@ -1,6 +1,5 @@
 /** Web view of the shared LLM provider registry (@animus/core), with each
- * provider's brand logo from @lobehub/icons attached (a web-only concern).
- * Adding a provider is still a single entry in core — just map its icon here. */
+ * provider's brand logo from @lobehub/icons attached (a web-only concern). */
 
 import {
   type ModelOption,
@@ -13,7 +12,7 @@ const ICONS: Record<ProviderId, IconType> = {
   openai: OpenAI,
   anthropic: Anthropic,
   google: Gemini,
-  Azure: Azure
+  azure: Azure,
 };
 
 export interface Provider {
