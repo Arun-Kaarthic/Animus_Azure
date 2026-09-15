@@ -1,16 +1,11 @@
 /** Validate a BYO provider key with a single, cheap, read-only request before we
- * store it — so a typo surfaces immediately instead of failing mid-render. Each
- * check hits the provider's lightweight "list/whoami" endpoint and treats a 2xx
- * as valid; any non-2xx or network/timeout error is treated as invalid (the user
- * can simply re-enter the key). */
+ * store it — so a typo surfaces immediately instead of failing mid-render. */
 
 import type { ProviderId } from "@animus/core";
 import { logger } from "../lib/logger.ts";
 
 const VALIDATION_TIMEOUT_MS = 10_000;
 
-/** GET `url` with `headers` and report whether the response was 2xx. Never
- * throws — a thrown fetch (DNS, timeout, offline) counts as invalid. */
 async function isOk(
   url: string,
   headers: Record<string, string>
@@ -23,8 +18,6 @@ async function isOk(
     });
     return res.ok;
   } catch (error) {
-    // Neither the URL nor the raw error: Google's endpoint carries the key in
-    // its query string and fetch errors echo the full URL back.
     const { origin, pathname } = new URL(url);
     logger.warn(
       {
@@ -34,6 +27,28 @@ async function isOk(
       "provider key validation request failed"
     );
     return false;
+  }
+}
+
+function parseAzureCredential(value: string): { apiKey: string; baseURL: string } | null {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      typeof parsed.apiKey !== "string" ||
+      typeof parsed.baseURL !== "string" ||
+      !parsed.apiKey.trim() ||
+      !parsed.baseURL.trim()
+    ) {
+      return null;
+    }
+    const baseURL = parsed.baseURL.replace(/\/$/, "");
+    const url = new URL(baseURL);
+    if (url.protocol !== "https:") {
+      return null;
+    }
+    return { apiKey: parsed.apiKey.trim(), baseURL };
+  } catch {
+    return null;
   }
 }
 
@@ -57,10 +72,15 @@ export function validateLlmKey(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
         {}
       );
-    case "Azure":
-      return isOk(
-        "",{}
-      );
+    case "azure": {
+      const credential = parseAzureCredential(apiKey);
+      if (!credential) {
+        return Promise.resolve(false);
+      }
+      return isOk(`${credential.baseURL}/models`, {
+        authorization: `Bearer ${credential.apiKey}`,
+      });
+    }
     default: {
       const exhaustive: never = provider;
       throw new Error(`Unsupported LLM provider: ${String(exhaustive)}`);
