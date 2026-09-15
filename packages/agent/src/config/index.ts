@@ -17,8 +17,7 @@ export interface LlmKey {
 }
 
 /** `modelId` overrides the env inference profile, for title generation.
- * Credentials go in explicitly, never via the SDK's AWS_* chain: Vercel shadows
- * those at runtime, so the chain works locally and fails silently in prod. */
+ * Credentials go in explicitly, never via the SDK's AWS_* chain. */
 export function getModel(modelId?: string): LanguageModel {
   const env = getServerEnv();
   const bedrock = createAmazonBedrock({
@@ -29,7 +28,17 @@ export function getModel(modelId?: string): LanguageModel {
   return bedrock(modelId ?? env.bedrockModel);
 }
 
-/** Build a BYOK model from a decrypted key. Exhaustive over the LLM providers. */
+/**
+ * Build a BYOK model from a decrypted key.
+ *
+ * Azure AI Foundry uses its OpenAI-compatible endpoint. The value stored in
+ * `key.apiKey` is intentionally a single JSON credential envelope:
+ * { "apiKey": "...", "baseURL": "https://<resource>.openai.azure.com/openai/v1" }
+ * The `model` field is the Azure deployment name.
+ *
+ * This keeps the existing encrypted single-key storage model while allowing
+ * each user to point Animus at their own Azure AI Foundry resource.
+ */
 function buildByokModel(key: LlmKey): LanguageModel {
   switch (key.provider) {
     case "anthropic":
@@ -38,6 +47,25 @@ function buildByokModel(key: LlmKey): LanguageModel {
       return createOpenAI({ apiKey: key.apiKey })(key.model);
     case "google":
       return createGoogleGenerativeAI({ apiKey: key.apiKey })(key.model);
+    case "azure": {
+      let credential: { apiKey: string; baseURL: string };
+      try {
+        credential = JSON.parse(key.apiKey) as { apiKey: string; baseURL: string };
+      } catch {
+        throw new Error(
+          "Invalid Azure AI Foundry credential. Expected JSON with apiKey and baseURL."
+        );
+      }
+      if (!credential.apiKey || !credential.baseURL) {
+        throw new Error(
+          "Invalid Azure AI Foundry credential. Expected apiKey and baseURL."
+        );
+      }
+      return createOpenAI({
+        apiKey: credential.apiKey,
+        baseURL: credential.baseURL.replace(/\/$/, ""),
+      })(key.model);
+    }
     default: {
       const exhaustive: never = key.provider;
       throw new Error(`Unsupported LLM provider: ${String(exhaustive)}`);
