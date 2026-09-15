@@ -70,10 +70,15 @@ const ServerEnvBaseSchema = z.object({
   DAYTONA_API_KEY: z.string().optional(),
   DAYTONA_TARGET: z.string().optional(),
   /** R2 video storage. The endpoint is derived from the account id. */
-  R2_ACCOUNT_ID: z.string().min(1, "R2_ACCOUNT_ID is required"),
-  R2_ACCESS_KEY_ID: z.string().min(1, "R2_ACCESS_KEY_ID is required"),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, "R2_SECRET_ACCESS_KEY is required"),
-  R2_BUCKET: z.string().min(1, "R2_BUCKET is required"),
+  // R2_ACCOUNT_ID: z.string().min(1, "R2_ACCOUNT_ID is required"),
+  // R2_ACCESS_KEY_ID: z.string().min(1, "R2_ACCESS_KEY_ID is required"),
+  // R2_SECRET_ACCESS_KEY: z.string().min(1, "R2_SECRET_ACCESS_KEY is required"),
+  // R2_BUCKET: z.string().min(1, "R2_BUCKET is required"),
+  /** Disabling R2 storage */
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
 });
 
 type RawServerEnv = z.infer<typeof ServerEnvBaseSchema>;

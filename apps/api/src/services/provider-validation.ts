@@ -57,6 +57,10 @@ export function validateLlmKey(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
         {}
       );
+    case "Azure":
+      return isOk(
+        "",{}
+      );
     default: {
       const exhaustive: never = provider;
       throw new Error(`Unsupported LLM provider: ${String(exhaustive)}`);

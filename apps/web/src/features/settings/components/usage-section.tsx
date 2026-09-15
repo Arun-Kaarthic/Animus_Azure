@@ -32,6 +32,7 @@ const PAGE_SIZE = 50;
 const ANTHROPIC_MODEL = /anthropic|claude/i;
 const OPENAI_MODEL = /openai|gpt|^o\d/i;
 const GOOGLE_MODEL = /google|gemini/i;
+const AZURE_MODEL = /Azure|OpenAI/i;
 function modelIcon(model: string) {
   if (ANTHROPIC_MODEL.test(model)) {
     return Anthropic;
@@ -41,6 +42,9 @@ function modelIcon(model: string) {
   }
   if (GOOGLE_MODEL.test(model)) {
     return Gemini;
+  }
+  if (AZURE_MODEL.test(model)) {
+    return OpenAI
   }
   return Bedrock;
 }

@@ -7,12 +7,13 @@ import {
   PROVIDERS as PROVIDER_INFO,
   type ProviderId,
 } from "@animus/core";
-import { Anthropic, Gemini, type IconType, OpenAI } from "@lobehub/icons";
+import { Anthropic, Azure, Gemini, type IconType, OpenAI } from "@lobehub/icons";
 
 const ICONS: Record<ProviderId, IconType> = {
   openai: OpenAI,
   anthropic: Anthropic,
   google: Gemini,
+  Azure: Azure
 };
 
 export interface Provider {

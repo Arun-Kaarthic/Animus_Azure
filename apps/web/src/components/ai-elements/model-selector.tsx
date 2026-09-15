@@ -163,6 +163,7 @@ export type ModelSelectorLogoProps = Omit<
     | "lmstudio"
     | "anthropic"
     | "aihubmix"
+    | "Azure"
     | "fireworks-ai"
     | "modelscope"
     | "llama"

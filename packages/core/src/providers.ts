@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-export const PROVIDER_IDS = ["anthropic", "openai", "google"] as const;
+export const PROVIDER_IDS = ["anthropic", "openai", "google", "Azure"] as const;
 
 export const ProviderIdSchema = z.enum(PROVIDER_IDS);
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -49,11 +49,24 @@ export const PROVIDERS: readonly ProviderInfo[] = [
       { id: "gpt-5.4-pro", name: "GPT-5.4 Pro" },
       { id: "gpt-5.4", name: "GPT-5.4" },
       { id: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
+      { id: "gpt-5.6-luna", name: "GPT-5.6 luna" },
     ],
   },
   {
     id: "google",
     name: "Google Gemini",
+    envKey: "GEMINI_API_KEY",
+    placeholder: "AIza...",
+    docsUrl: "https://aistudio.google.com/app/apikey",
+    models: [
+      { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite" },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview" },
+    ],
+  },
+  {
+    id: "Azure",
+    name: "Azure AI Foundary",
     envKey: "GEMINI_API_KEY",
     placeholder: "AIza...",
     docsUrl: "https://aistudio.google.com/app/apikey",
