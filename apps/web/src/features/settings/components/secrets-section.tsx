@@ -1,8 +1,6 @@
-/** BYO provider keys. A user can bring an LLM key (Anthropic / OpenAI / Google,
- * with a curated model) and/or an ElevenLabs narration key. A brought key runs
- * on the user's own account, so it isn't metered — the way to keep generating
- * once the free credits run out. Keys are verified server-side on save; the
- * plaintext never comes back, only a masked preview. */
+/** BYO provider keys. Supports Anthropic / OpenAI / Google and Azure AI Foundry,
+ * plus an ElevenLabs narration key. Plaintext keys are sent only to the API,
+ * verified server-side, encrypted at rest, and never returned to the browser. */
 
 import {
   type LlmKeyPreview,
@@ -30,7 +28,6 @@ import { SectionHeading } from "./section-heading";
 
 const [FIRST_PROVIDER] = PROVIDERS;
 
-/** A password-style key input with a reveal toggle. */
 function KeyInput({
   id,
   value,
@@ -61,17 +58,12 @@ function KeyInput({
         onClick={() => setReveal((v) => !v)}
         type="button"
       >
-        {reveal ? (
-          <EyeOffIcon className="size-4" />
-        ) : (
-          <EyeIcon className="size-4" />
-        )}
+        {reveal ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
       </button>
     </div>
   );
 }
 
-/** The masked "key on file" row with a remove action. */
 function SavedKeyRow({
   label,
   last4,
@@ -98,14 +90,11 @@ function SavedKeyRow({
 
 export function SecretsSection() {
   const [keys, setKeys] = useState<ProviderKeys>({ llm: null, tts: null });
-
   const [providerId, setProviderId] = useState<ProviderId>(FIRST_PROVIDER.id);
-  const [modelId, setModelId] = useState<string>(
-    FIRST_PROVIDER.models[0]?.id ?? ""
-  );
+  const [modelId, setModelId] = useState(FIRST_PROVIDER.models[0]?.id ?? "");
   const [llmKeyInput, setLlmKeyInput] = useState("");
+  const [azureEndpoint, setAzureEndpoint] = useState("");
   const [savingLlm, setSavingLlm] = useState(false);
-
   const [ttsKeyInput, setTtsKeyInput] = useState("");
   const [savingTts, setSavingTts] = useState(false);
 
@@ -113,24 +102,21 @@ export function SecretsSection() {
     let active = true;
     apiFetch<{ keys: ProviderKeys }>("/api/settings/keys")
       .then((data) => {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setKeys(data.keys);
         if (data.keys.llm) {
           setProviderId(data.keys.llm.provider);
           setModelId(data.keys.llm.model);
         }
       })
-      .catch(() => {
-        // No keys yet, or offline — leave the form empty.
-      });
+      .catch(() => {});
     return () => {
       active = false;
     };
   }, []);
 
   const provider = PROVIDERS.find((p) => p.id === providerId) ?? FIRST_PROVIDER;
+  const isAzure = providerId === "azure";
 
   function selectProvider(id: ProviderId) {
     setProviderId(id);
@@ -140,31 +126,31 @@ export function SecretsSection() {
 
   async function saveLlm() {
     const key = llmKeyInput.trim();
-    if (!(key && modelId)) {
-      return;
-    }
+    if (!(key && modelId)) return;
+
+    const keyPayload = isAzure
+      ? JSON.stringify({ apiKey: key, baseURL: azureEndpoint.trim() })
+      : key;
+    if (isAzure && !azureEndpoint.trim()) return;
+
     setSavingLlm(true);
     try {
-      const data = await apiFetch<{ key: LlmKeyPreview }>(
-        "/api/settings/keys",
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            kind: "llm",
-            provider: providerId,
-            model: modelId,
-            key,
-          }),
-        }
-      );
+      const data = await apiFetch<{ key: LlmKeyPreview }>("/api/settings/keys", {
+        method: "PUT",
+        body: JSON.stringify({
+          kind: "llm",
+          provider: providerId,
+          model: modelId,
+          key: keyPayload,
+        }),
+      });
       setKeys((prev) => ({ ...prev, llm: data.key }));
       setLlmKeyInput("");
+      setAzureEndpoint("");
       notifyCreditsChanged();
       toast.success("Model key saved");
     } catch (error) {
-      toast.error(
-        error instanceof ApiError ? error.message : "Couldn't save the key"
-      );
+      toast.error(error instanceof ApiError ? error.message : "Couldn't save the key");
     } finally {
       setSavingLlm(false);
     }
@@ -177,7 +163,7 @@ export function SecretsSection() {
       setKeys((prev) => ({ ...prev, llm: null }));
       notifyCreditsChanged();
     } catch {
-      // Leave the key until the next attempt.
+      // Keep the key until the next attempt.
     } finally {
       setSavingLlm(false);
     }
@@ -185,26 +171,19 @@ export function SecretsSection() {
 
   async function saveTts() {
     const key = ttsKeyInput.trim();
-    if (!key) {
-      return;
-    }
+    if (!key) return;
     setSavingTts(true);
     try {
-      const data = await apiFetch<{ key: TtsKeyPreview }>(
-        "/api/settings/keys",
-        {
-          method: "PUT",
-          body: JSON.stringify({ kind: "tts", key }),
-        }
-      );
+      const data = await apiFetch<{ key: TtsKeyPreview }>("/api/settings/keys", {
+        method: "PUT",
+        body: JSON.stringify({ kind: "tts", key }),
+      });
       setKeys((prev) => ({ ...prev, tts: data.key }));
       setTtsKeyInput("");
       notifyCreditsChanged();
       toast.success("ElevenLabs key saved");
     } catch (error) {
-      toast.error(
-        error instanceof ApiError ? error.message : "Couldn't save the key"
-      );
+      toast.error(error instanceof ApiError ? error.message : "Couldn't save the key");
     } finally {
       setSavingTts(false);
     }
@@ -217,7 +196,7 @@ export function SecretsSection() {
       setKeys((prev) => ({ ...prev, tts: null }));
       notifyCreditsChanged();
     } catch {
-      // Leave the key until the next attempt.
+      // Keep the key until the next attempt.
     } finally {
       setSavingTts(false);
     }
@@ -237,32 +216,20 @@ export function SecretsSection() {
       <div className="space-y-4">
         <div>
           <h3 className="font-medium text-sm">AI model</h3>
-          <p className="text-muted-foreground text-xs">
-            Runs the agent on your provider instead of ours.
-          </p>
+          <p className="text-muted-foreground text-xs">Runs the agent on your provider instead of ours.</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <label className="font-medium text-sm" htmlFor="llm-provider">
-              Provider
-            </label>
-            <Select
-              onValueChange={(value) => selectProvider(value as ProviderId)}
-              value={providerId}
-            >
-              <SelectTrigger className="w-full" id="llm-provider">
-                <SelectValue />
-              </SelectTrigger>
+            <label className="font-medium text-sm" htmlFor="llm-provider">Provider</label>
+            <Select onValueChange={(value) => selectProvider(value as ProviderId)} value={providerId}>
+              <SelectTrigger className="w-full" id="llm-provider"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {PROVIDERS.map((item) => {
                   const ItemIcon = item.icon;
                   return (
                     <SelectItem key={item.id} value={item.id}>
-                      <span className="flex items-center gap-2">
-                        <ItemIcon size={16} />
-                        {item.name}
-                      </span>
+                      <span className="flex items-center gap-2"><ItemIcon size={16} />{item.name}</span>
                     </SelectItem>
                   );
                 })}
@@ -271,40 +238,47 @@ export function SecretsSection() {
           </div>
 
           <div className="space-y-2">
-            <label className="font-medium text-sm" htmlFor="llm-model">
-              Model
-            </label>
-            <Select onValueChange={setModelId} value={modelId}>
-              <SelectTrigger className="w-full" id="llm-model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {provider.models.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <label className="font-medium text-sm" htmlFor="llm-model">{isAzure ? "Deployment name" : "Model"}</label>
+            {isAzure ? (
+              <Input
+                id="llm-model"
+                onChange={(event) => setModelId(event.target.value)}
+                placeholder="my-gpt-4o-deployment"
+                value={modelId}
+              />
+            ) : (
+              <Select onValueChange={setModelId} value={modelId}>
+                <SelectTrigger className="w-full" id="llm-model"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {provider.models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
+        {isAzure ? (
+          <div className="space-y-2">
+            <label className="font-medium text-sm" htmlFor="azure-endpoint">Azure AI Foundry OpenAI-compatible endpoint</label>
+            <Input
+              autoComplete="off"
+              id="azure-endpoint"
+              onChange={(event) => setAzureEndpoint(event.target.value)}
+              placeholder="https://YOUR-RESOURCE.openai.azure.com/openai/v1"
+              value={azureEndpoint}
+            />
+            <p className="text-muted-foreground text-xs">
+              Use the OpenAI-compatible base URL for your Azure AI Foundry resource. The deployment name above is sent as the model id.
+            </p>
+          </div>
+        ) : null}
+
         <div className="space-y-2">
-          <label className="font-medium text-sm" htmlFor="llm-key">
-            API key
-          </label>
-          <KeyInput
-            id="llm-key"
-            onChange={setLlmKeyInput}
-            placeholder={provider.placeholder}
-            value={llmKeyInput}
-          />
-          <a
-            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-            href={provider.docsUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <label className="font-medium text-sm" htmlFor="llm-key">API key</label>
+          <KeyInput id="llm-key" onChange={setLlmKeyInput} placeholder={provider.placeholder} value={llmKeyInput} />
+          <a className="text-muted-foreground text-xs underline-offset-4 hover:underline" href={provider.docsUrl} rel="noreferrer" target="_blank">
             Get a {provider.name} key
           </a>
         </div>
@@ -313,73 +287,32 @@ export function SecretsSection() {
           <SavedKeyRow
             label={`${savedLlmProvider?.name ?? keys.llm.provider} · ${keys.llm.model}`}
             last4={keys.llm.last4}
-            onRemove={() => {
-              void removeLlm();
-            }}
+            onRemove={() => void removeLlm()}
             saving={savingLlm}
           />
         ) : null}
 
-        <Button
-          disabled={savingLlm || !(llmKeyInput.trim() && modelId)}
-          onClick={() => {
-            void saveLlm();
-          }}
-        >
+        <Button disabled={savingLlm || !(llmKeyInput.trim() && modelId && (!isAzure || azureEndpoint.trim()))} onClick={() => void saveLlm()}>
           Save model key
         </Button>
       </div>
 
       <div className="space-y-4">
         <div>
-          <h3 className="font-medium text-sm">
-            Narration ({TTS_PROVIDER.name})
-          </h3>
-          <p className="text-muted-foreground text-xs">
-            Synthesizes narration on your ElevenLabs account. Your voice setting
-            still applies.
-          </p>
+          <h3 className="font-medium text-sm">Narration ({TTS_PROVIDER.name})</h3>
+          <p className="text-muted-foreground text-xs">Synthesizes narration on your ElevenLabs account. Your voice setting still applies.</p>
         </div>
-
         <div className="space-y-2">
-          <label className="font-medium text-sm" htmlFor="tts-key">
-            API key
-          </label>
-          <KeyInput
-            id="tts-key"
-            onChange={setTtsKeyInput}
-            placeholder={TTS_PROVIDER.placeholder}
-            value={ttsKeyInput}
-          />
-          <a
-            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-            href={TTS_PROVIDER.docsUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <label className="font-medium text-sm" htmlFor="tts-key">API key</label>
+          <KeyInput id="tts-key" onChange={setTtsKeyInput} placeholder={TTS_PROVIDER.placeholder} value={ttsKeyInput} />
+          <a className="text-muted-foreground text-xs underline-offset-4 hover:underline" href={TTS_PROVIDER.docsUrl} rel="noreferrer" target="_blank">
             Get an {TTS_PROVIDER.name} key
           </a>
         </div>
-
         {keys.tts ? (
-          <SavedKeyRow
-            label={TTS_PROVIDER.name}
-            last4={keys.tts.last4}
-            onRemove={() => {
-              void removeTts();
-            }}
-            saving={savingTts}
-          />
+          <SavedKeyRow label={TTS_PROVIDER.name} last4={keys.tts.last4} onRemove={() => void removeTts()} saving={savingTts} />
         ) : null}
-
-        <Button
-          disabled={savingTts || !ttsKeyInput.trim()}
-          onClick={() => {
-            void saveTts();
-          }}
-        >
-          Save narration key
-        </Button>
+        <Button disabled={savingTts || !ttsKeyInput.trim()} onClick={() => void saveTts()}>Save narration key</Button>
       </div>
     </div>
   );

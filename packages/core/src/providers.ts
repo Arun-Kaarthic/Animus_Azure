@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-export const PROVIDER_IDS = ["anthropic", "openai", "google", "Azure"] as const;
+export const PROVIDER_IDS = ["anthropic", "openai", "google", "azure"] as const;
 
 export const ProviderIdSchema = z.enum(PROVIDER_IDS);
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -65,16 +65,14 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     ],
   },
   {
-    id: "Azure",
-    name: "Azure AI Foundary",
-    envKey: "GEMINI_API_KEY",
-    placeholder: "AIza...",
-    docsUrl: "https://aistudio.google.com/app/apikey",
-    models: [
-      { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
-      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite" },
-      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview" },
-    ],
+    id: "azure",
+    name: "Azure AI Foundry",
+    envKey: "AZURE_AI_FOUNDRY_API_KEY",
+    placeholder: "Azure AI Foundry API key",
+    docsUrl: "https://ai.azure.com/",
+    // Azure deployments are user-defined, so the deployment/model id is entered
+    // by the user rather than restricted to a hard-coded list.
+    models: [],
   },
 ];
 
@@ -89,6 +87,9 @@ export function isValidModelForProvider(
   provider: ProviderId,
   model: string
 ): boolean {
+  if (provider === "azure") {
+    return model.trim().length > 0;
+  }
   return LLM_MODELS[provider].some((m) => m.id === model);
 }
 

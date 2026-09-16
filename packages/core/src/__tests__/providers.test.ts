@@ -13,30 +13,25 @@ const HTTPS_URL = /^https:\/\//;
 
 describe("PROVIDER_IDS", () => {
   it("is the supported LLM provider set", () => {
-    expect(PROVIDER_IDS).toEqual(["anthropic", "openai", "google"]);
+    expect(PROVIDER_IDS).toEqual(["anthropic", "openai", "google", "azure"]);
   });
 });
 
 describe("ProviderIdSchema", () => {
   it("accepts every known provider id", () => {
-    for (const id of PROVIDER_IDS) {
-      expect(ProviderIdSchema.safeParse(id).success).toBe(true);
-    }
+    for (const id of PROVIDER_IDS) expect(ProviderIdSchema.safeParse(id).success).toBe(true);
   });
 
   it("rejects a provider we no longer support", () => {
     expect(ProviderIdSchema.safeParse("mistral").success).toBe(false);
   });
 
-  it("rejects the TTS provider (not an LLM provider)", () => {
+  it("rejects the TTS provider", () => {
     expect(ProviderIdSchema.safeParse("elevenlabs").success).toBe(false);
   });
 
-  it("rejects a non-string value", () => {
+  it("rejects non-string and empty values", () => {
     expect(ProviderIdSchema.safeParse(null).success).toBe(false);
-  });
-
-  it("rejects an empty string", () => {
     expect(ProviderIdSchema.safeParse("").success).toBe(false);
   });
 });
@@ -47,12 +42,14 @@ describe("PROVIDERS", () => {
     expect(PROVIDERS.map((p) => p.id)).toEqual([...PROVIDER_IDS]);
   });
 
-  it("has no duplicate ids", () => {
+  it("has no duplicate ids or env-var names", () => {
     const ids = PROVIDERS.map((p) => p.id);
+    const envKeys = PROVIDERS.map((p) => p.envKey);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(envKeys).size).toBe(envKeys.length);
   });
 
-  it("provides complete, non-empty metadata for each provider", () => {
+  it("provides complete metadata", () => {
     for (const provider of PROVIDERS) {
       expect(provider.name.length).toBeGreaterThan(0);
       expect(provider.envKey.length).toBeGreaterThan(0);
@@ -61,27 +58,17 @@ describe("PROVIDERS", () => {
     }
   });
 
-  it("uses unique env-var names", () => {
-    const envKeys = PROVIDERS.map((p) => p.envKey);
-    expect(new Set(envKeys).size).toBe(envKeys.length);
-  });
-
-  it("offers at least one curated model per provider", () => {
-    for (const provider of PROVIDERS) {
-      expect(provider.models.length).toBeGreaterThan(0);
-      for (const model of provider.models) {
-        expect(model.id.length).toBeGreaterThan(0);
-        expect(model.name.length).toBeGreaterThan(0);
-      }
-    }
+  it("allows Azure deployments to be entered by the user", () => {
+    const azure = PROVIDERS.find((p) => p.id === "azure");
+    expect(azure?.models).toHaveLength(0);
+    expect(isValidModelForProvider("azure", "my-deployment")).toBe(true);
+    expect(isValidModelForProvider("azure", "  ")).toBe(false);
   });
 });
 
 describe("LLM_MODELS", () => {
-  it("mirrors each provider's curated model list", () => {
-    for (const provider of PROVIDERS) {
-      expect(LLM_MODELS[provider.id]).toEqual(provider.models);
-    }
+  it("mirrors each provider's model list", () => {
+    for (const provider of PROVIDERS) expect(LLM_MODELS[provider.id]).toEqual(provider.models);
   });
 });
 
@@ -97,7 +84,7 @@ describe("isValidModelForProvider", () => {
     expect(isValidModelForProvider("anthropic", openaiModel ?? "")).toBe(false);
   });
 
-  it("rejects an unknown model", () => {
+  it("rejects an unknown model for curated providers", () => {
     expect(isValidModelForProvider("google", "not-a-real-model")).toBe(false);
   });
 });
