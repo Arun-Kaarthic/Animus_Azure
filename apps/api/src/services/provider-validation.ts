@@ -41,11 +41,12 @@ function parseAzureCredential(value: string): { apiKey: string; baseURL: string 
     ) {
       return null;
     }
+
     const baseURL = parsed.baseURL.replace(/\/$/, "");
     const url = new URL(baseURL);
-    if (url.protocol !== "https:") {
-      return null;
-    }
+    if (url.protocol !== "https:") return null;
+    if (!baseURL.endsWith("/openai/v1")) return null;
+
     return { apiKey: parsed.apiKey.trim(), baseURL };
   } catch {
     return null;
@@ -55,7 +56,8 @@ function parseAzureCredential(value: string): { apiKey: string; baseURL: string 
 /** Validate an LLM provider key. Exhaustive over the supported providers. */
 export function validateLlmKey(
   provider: ProviderId,
-  apiKey: string
+  apiKey: string,
+  model?: string
 ): Promise<boolean> {
   switch (provider) {
     case "anthropic":
@@ -74,12 +76,25 @@ export function validateLlmKey(
       );
     case "azure": {
       const credential = parseAzureCredential(apiKey);
-      if (!credential) {
-        return Promise.resolve(false);
-      }
-      return isOk(`${credential.baseURL}/models`, {
+      if (!credential) return Promise.resolve(false);
+
+      // Azure AI Foundry OpenAI v1 accepts API keys using api-key. Also send
+      // Authorization: Bearer for compatible gateways that use that form.
+      const headers = {
+        "api-key": credential.apiKey,
         authorization: `Bearer ${credential.apiKey}`,
-      });
+      };
+
+      if (model?.trim()) {
+        return isOk(
+          `${credential.baseURL}/models/${encodeURIComponent(model.trim())}`,
+          headers
+        ).then((ok) =>
+          ok ? true : isOk(`${credential.baseURL}/models`, headers)
+        );
+      }
+
+      return isOk(`${credential.baseURL}/models`, headers);
     }
     default: {
       const exhaustive: never = provider;
